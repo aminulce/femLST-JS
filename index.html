@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>scrollTop demo</title>
+ <script src="countRowColumn.js"></script>
+  <script src="https://code.jquery.com/jquery-1.10.2.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/5.4.0/math.min.js"></script>
+ <script src="plotly-latest.min.js"></script>
+   
+   <script src="contourD3.js"></script>
+   <script src="femLST.js"></script>
+  
+</head>
+<body>
+ 
+<input name="elastic_mod" type="text" id="em" placeholder="Elastic Modulus" class = "calc " value="2e6" size="100%">
+<input name="poissons" type="text" id="nu" placeholder="Poissons Ratio" class = "calc " value="0.2" size="100%">
+<input name="elementsList" type="text" id="el" placeholder="Elements" class = "calc " value="" size="100%">
+<button class="btn-middle" id="fem-calc">Calculate</button>
+<div id="myDivOrig"></div>
+<div id="myDivDeformed"></div>
+<div id="myDivBoth"></div>
+<div id="myDivAnimated"></div>
+
+<script>
+//callingfemlst and reading data from jason created by femLst
+
+
+$('#fem-calc').click(function(){
+var E, nu;
+var els = {"mathjs":
+		   "DenseMatrix",
+		   "data":[[1,2,3,4,5,6],
+		           [2,7,3,9,8,5],
+				   [7,10,3,12,11,8]],
+			"size":[3,6]
+		  }
+E=parseFloat($("#em").val());
+nu = parseFloat($("#nu").val());
+
+const elems = JSON.parse( els, math.json.reviver);
+console.log(JSON.stringify(elems));
+var numberOfElements = numel('row',elems);
+var nodes = math.matrix([[0,0],
+						 [10,0],
+						 [15,15],
+						 [5,0],
+						 [12.5,7.5],
+						 [5,7.5],
+						 [20,0],
+						 [17.5,7.5],
+						 [15,0],
+						 [30,0],
+						 [25,7.5],
+						 [25,0]]);
+var dimension = 2;
+var loadedNodes = math.matrix([[3,1,500],
+							   [4,2,-350],
+							   [9,2,400],
+							   [12,1,-1400],]);
+var fixedNodesWithDirections = math.matrix([[1,1],
+											[1,2],
+											[10,1],
+											[10,2]]);
+//End of Inputs											
+var transpNodes = math.transpose(nodes).valueOf();
+var transpLoadedNodes = math.transpose(loadedNodes).valueOf();
+var transpBCNodes = math.transpose(fixedNodesWithDirections).valueOf();
+//Getting indices of loaded and BC nodes
+var loadedNodeIndices = nodeIndexFromNodeNumberAndDirections(transpLoadedNodes[0],transpLoadedNodes[1],dimension);
+var bcNodeIndices = nodeIndexFromNodeNumberAndDirections(transpBCNodes[0],transpBCNodes[1],dimension);
+//BUilding force matrix
+var forceMatrix=math.zeros([numel('row',nodes)]*2);//for 2d there are two co-ordinates for each node
+var loads = transpLoadedNodes[2];
+for (var jj = 0; jj<loadedNodeIndices.length;jj++)//applying the loads on specified nodes
+{
+	forceMatrix.subset(math.index(loadedNodeIndices[jj]),loads[jj]);
+}
+//Building boundary condition Matrix
+var boundaryCondition=math.matrix([bcNodeIndices]);//boundary conditions
+//gettign the results
+var outNodes = lst(nodes,elems,forceMatrix,boundaryCondition, E, nu);
+const dispNodes = JSON.parse(outNodes[1], math.json.reviver);
+var transpDispNodes = math.transpose(dispNodes).valueOf();
+console.log(transpDispNodes)
+var drawOrder= math.matrix([[0,3,1,4,5,0]]);
+
+var splittedNodes = splitter(nodes,elems);
+var xValsForNodes = splittedNodes[0]; //splitting x and y values
+var yValsForNodes = splittedNodes[1];
+var splittedDispNodes = splitter(dispNodes,elems);
+var xValsForDispNodes = splittedDispNodes[0]; //splitting x and y values
+var yValsForDispNodes = splittedDispNodes[1];
+
+
+var XValsForNodes = math.transpose(xValsForNodes).valueOf(); //matrix to array
+var YValsForNodes = math.transpose(yValsForNodes).valueOf();
+var XValsForDispNodes = math.transpose(xValsForDispNodes).valueOf();
+var YValsForDispNodes = math.transpose(yValsForDispNodes).valueOf();
+
+
+
+//plotting on myDiv2
+var drawOrigNodes = [];
+var drawDispNodes = [];
+var dataOrig = [], dataDeformed = [], dataBoth = [];
+for (var tt = 0;tt<numberOfElements; tt++){
+	 drawOrigNodes[tt]= {
+	  x: XValsForNodes[tt].valueOf(),
+	  y: YValsForNodes[tt].valueOf(),
+	  type: 'scatter',
+	  hoverinfo: 'none',
+	  marker: {
+	  color: '#000',
+	  size: 8
+	  },
+	  line: {
+	  color: '#686666',
+	  width: 2
+	  }
+	};
+	dataOrig.push(drawOrigNodes[tt]);
+	dataBoth.push(drawOrigNodes[tt]);
+	drawDispNodes[tt]= {
+	  x: XValsForDispNodes[tt].valueOf(),
+	  y: YValsForDispNodes[tt].valueOf(),
+	  type: 'scatter',
+	  hoverinfo: 'none',
+	  marker: {
+	  color: '#ad0a46',
+	  size: 8
+	  },
+	  line: {
+	  color: '#005a96',
+	  width: 2
+	  }
+	};
+	dataDeformed.push(drawDispNodes[tt]);
+	dataBoth.push(drawDispNodes[tt]);
+}
+
+var annDeformed = [],annOrig = [];
+for (jj = 0; jj<loadedNodeIndices.length;jj++)//Adding annotation arrows
+{
+	if (transpLoadedNodes[1][jj]==1)//Checking the direction of load application 1 means x direction
+	{
+		if (transpLoadedNodes[2][jj]<0){ //checking the sign of load application
+		annDeformed[jj] = {
+			  x: transpDispNodes[0][transpLoadedNodes[0][jj]-1],
+			  y: transpDispNodes[1][transpLoadedNodes[0][jj]-1],
+			  xref: 'x',
+			  yref: 'y',
+			  text: String(transpLoadedNodes[2][jj]),
+			  font: {
+			  color: "black",
+			  size: 15
+			  },
+			  showarrow: true,
+			  arrowcolor: 'rgb(142, 22, 30)',
+			  arrowhead: 2,
+			  arrowsize: 1,
+			  arrowwidth: 4,
+			  ax: 50,
+			  ay: 0
+			};
+		annOrig[jj] = {
+			  x: transpNodes[0][transpLoadedNodes[0][jj]-1],
+			  y: transpNodes[1][transpLoadedNodes[0][jj]-1],
+			  xref: 'x',
+			  yref: 'y',
+			  text: String(transpLoadedNodes[2][jj]),
+			  font: {
+			  color: "black",
+			  size: 15
+			  },
+			  showarrow: true,
+			  arrowcolor: 'rgb(142, 22, 30)',
+			  arrowhead: 2,
+			  arrowsize: 1,
+			  arrowwidth: 4,
+			  ax: 50,
+			  ay: 0
+			};
+		}
+		else{
+		annDeformed[jj] = {
+			  x: transpDispNodes[0][transpLoadedNodes[0][jj]-1],
+			  y: transpDispNodes[1][transpLoadedNodes[0][jj]-1],
+			  xref: 'x',
+			  yref: 'y',
+			  text: String(transpLoadedNodes[2][jj]),
+			  font: {
+			  color: "black",
+			  size: 15
+			  },
+			  showarrow: true,
+			  arrowcolor: 'rgb(142, 22, 30)',
+			  arrowhead: 2,
+			  arrowsize: 1,
+			  arrowwidth: 4,
+			  ax: -50,
+			  ay: 0
+			};
+		annOrig[jj] = {
+			  x: transpNodes[0][transpLoadedNodes[0][jj]-1],
+			  y: transpNodes[1][transpLoadedNodes[0][jj]-1],
+			  xref: 'x',
+			  yref: 'y',
+			  text: String(transpLoadedNodes[2][jj]),
+			  font: {
+			  color: "black",
+			  size: 15
+			  },
+			  showarrow: true,
+			  arrowcolor: 'rgb(142, 22, 30)',
+			  arrowhead: 2,
+			  arrowsize: 1,
+			  arrowwidth: 4,
+			  ax: -50,
+			  ay: 0
+			};
+		}
+	}
+	else if(transpLoadedNodes[1][jj]==2) //Checking the direction of load application 2 means y direction
+	{
+		if (transpLoadedNodes[2][jj]<0){ //checking the sign of load application
+			annDeformed[jj] = {
+				  x: transpDispNodes[0][transpLoadedNodes[0][jj]-1],
+				  y: transpDispNodes[1][transpLoadedNodes[0][jj]-1],
+				  xref: 'x',
+				  yref: 'y',
+				  text: String(transpLoadedNodes[2][jj]),
+				  font: {
+				  color: "black",
+				  size: 15
+				  },
+				  showarrow: true,
+				  arrowcolor: 'rgb(142, 22, 30)',
+				  arrowhead: 2,
+				  arrowsize: 1,
+				  arrowwidth: 4,
+				  ax: 0,
+				  ay: -50
+				};
+			annOrig[jj] = {
+				  x: transpNodes[0][transpLoadedNodes[0][jj]-1],
+				  y: transpNodes[1][transpLoadedNodes[0][jj]-1],
+				  xref: 'x',
+				  yref: 'y',
+				  text: String(transpLoadedNodes[2][jj]),
+				  font: {
+				  color: "black",
+				  size: 15
+				  },
+				  showarrow: true,
+				  arrowcolor: 'rgb(142, 22, 30)',
+				  arrowhead: 2,
+				  arrowsize: 1,
+				  arrowwidth: 4,
+				  ax: 0,
+				  ay: -50
+				};
+		}
+		else { //checking the sign of load application
+			annDeformed[jj] = {
+				  x: transpDispNodes[0][transpLoadedNodes[0][jj]-1],
+				  y: transpDispNodes[1][transpLoadedNodes[0][jj]-1],
+				  xref: 'x',
+				  yref: 'y',
+				  text: String(transpLoadedNodes[2][jj]),
+  				  font: {
+				  color: "black",
+				  size: 15
+				  },
+				  showarrow: true,
+				  arrowcolor: 'rgb(142, 22, 30)',
+				  arrowhead: 2,
+				  arrowsize: 1,
+				  arrowwidth: 4,
+				  ax: 0,
+				  ay: 50
+				};
+			annOrig[jj] = {
+				  x: transpNodes[0][transpLoadedNodes[0][jj]-1],
+				  y: transpNodes[1][transpLoadedNodes[0][jj]-1],
+				  xref: 'x',
+				  yref: 'y',
+				  text: String(transpLoadedNodes[2][jj]),
+  				  font: {
+				  color: "black",
+				  size: 15
+				  },
+				  showarrow: true,
+				  arrowcolor: 'rgb(142, 22, 30)',
+				  arrowhead: 2,
+				  arrowsize: 1,
+				  arrowwidth: 4,
+				  ax: 0,
+				  ay: 50
+				};
+		}
+	}
+}//end of drawing annotation arrows
+
+
+var layoutDeformed = {
+  title: "Deformed Structure",
+  width:800,
+  height:800,
+  showlegend: false,
+  xaxis: {
+    autorange: true,
+    showgrid: true,
+    zeroline: false,
+    showline: true,
+    autotick: true,
+    showticklabels: true,
+	linewidth: 2,
+    mirror: true
+  },
+  yaxis: {
+    autorange: true,
+    showgrid: true,
+    zeroline: false,
+    showline: true,
+    autotick: true,
+    showticklabels: true,
+	linewidth: 2,
+    mirror: true
+  },
+  annotations: annDeformed
+}
+var layoutOrig = {
+  title: "Original Structure",
+  width:800,
+  height:800,
+  showlegend: false,
+  xaxis: {
+    autorange: true,
+    showgrid: true,
+    zeroline: false,
+    showline: true,
+    autotick: true,
+    showticklabels: true,
+	linewidth: 2,
+    mirror: true
+  },
+  yaxis: {
+    autorange: true,
+    showgrid: true,
+    zeroline: false,
+    showline: true,
+    autotick: true,
+    showticklabels: true,
+	linewidth: 2,
+    mirror: true
+  },
+  annotations: annOrig
+}
+var layoutBoth = {
+  title: "Superimposed Deformed Structure on Original Structure",
+  width:800,
+  height:800,
+  showlegend: false,
+  xaxis: {
+    autorange: true,
+    showgrid: true,
+    zeroline: false,
+    showline: true,
+    autotick: true,
+    showticklabels: true,
+	linewidth: 2,
+    mirror: true
+  },
+  yaxis: {
+    autorange: true,
+    showgrid: false,
+    zeroline: false,
+    showline: true,
+    autotick: true,
+    showticklabels: true,
+	linewidth: 2,
+    mirror: true
+  },
+  annotations: annDeformed
+}
+ console.log(dataOrig)
+Plotly.newPlot('myDivOrig', dataOrig,layoutOrig);
+Plotly.newPlot('myDivDeformed', dataDeformed,layoutDeformed);
+Plotly.newPlot('myDivBoth', dataBoth,layoutBoth);
+
+});
+/*Plotting the animated graph
+Plotly.newPlot('myDivAnimated', dataOrig, layoutOrig);
+
+function randomize() {
+  Plotly.animate('myDivAnimated', {
+    data: dataDeformed,
+    layout: layoutDeformed
+  }, {
+    transition: {
+      duration: 500,
+      easing: 'cubic-in-out'
+    },
+	  frame: {
+		  duration: 500
+	  }
+  })
+}*/
+</script>
+
+
+</body>
+</html>
