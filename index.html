@@ -39,7 +39,7 @@ var els = {"mathjs":
 E=parseFloat($("#em").val());
 nu = parseFloat($("#nu").val());
 
-const elems = JSON.parse( els, math.json.reviver);
+const elems = JSON.parse(els, math.json.reviver);
 console.log(JSON.stringify(elems));
 var numberOfElements = numel('row',elems);
 var nodes = math.matrix([[0,0],
@@ -70,7 +70,7 @@ var transpBCNodes = math.transpose(fixedNodesWithDirections).valueOf();
 //Getting indices of loaded and BC nodes
 var loadedNodeIndices = nodeIndexFromNodeNumberAndDirections(transpLoadedNodes[0],transpLoadedNodes[1],dimension);
 var bcNodeIndices = nodeIndexFromNodeNumberAndDirections(transpBCNodes[0],transpBCNodes[1],dimension);
-//BUilding force matrix
+//Building force matrix
 var forceMatrix=math.zeros([numel('row',nodes)]*2);//for 2d there are two co-ordinates for each node
 var loads = transpLoadedNodes[2];
 for (var jj = 0; jj<loadedNodeIndices.length;jj++)//applying the loads on specified nodes
