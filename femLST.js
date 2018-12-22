@@ -48,23 +48,44 @@ function splitter(matrix2,elems){//splits a coordinate matrix into x,y,z values 
 function nodeIndexFromNodeNumberAndDirections(nodes,directions,dimension){
 	var numNodes = nodes.length, node,direction;
 	var nodeIndices = math.squeeze(math.zeros(numNodes,1)).valueOf();
+	console.log(nodes);
 	console.log(nodeIndices);
-	if(dimension==2)
+	
+	if(dimension==2 && numNodes !=1)
 	{
 		for(var ii=0;ii<numNodes;ii++)
 		{
 			node = nodes[ii];
 			direction = directions[ii];
 			if (direction==1)
+			{
 				nodeIndices[ii] = node*2-2;
+			}
 			else if (direction==2)
+			{
+				console.log('Here');
 				nodeIndices[ii] = node*2-1;
+				console.log(ii);
+			}
 			else
 				alert('For a 2D analysis second column on nodes only accept 1 and 2');
 		}
 	return	nodeIndices;	
 	}
-	
+	else{
+		node = nodes[0];
+		direction = directions[0];
+		if (direction==1)
+		{
+			nodeIndices = node*2-2;
+		}
+		else if (direction==2)
+		{
+			nodeIndices = node*2-1;
+		}
+		console.log(nodeIndices);
+		return	nodeIndices;
+	}
 }
 function numel(rc,matrix){
 	if (rc=='row')
